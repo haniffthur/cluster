@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Device;
+use App\Models\DeviceIo;
 use App\Models\AccessCard;
 use App\Models\GateLog;
 use Illuminate\Support\Facades\Http;
@@ -73,43 +74,107 @@ class GateController extends Controller
      * Fungsi Snapshot Dinamis
      * Menggunakan IP, Username, & Password dari database ($ioConfig)
      */
-    private function captureSnapshotDynamic($ioConfig, $cardNum)
-    {
-        try {
-            // URL Dinamis: Menggunakan IP dari database
-            $url = "http://{$ioConfig->cam_ip}/cgi-bin/snapshot.cgi?channel=1";
+private function captureSnapshotDynamic($configIo, $cardNo)
+{
+    $ip = trim($configIo->cam_ip);
+    $username = $configIo->cam_username ?? 'admin';
+    $password = $configIo->cam_password ?? 'admin';
 
-            // PERCOBAAN 1: Digest Auth (Default Dahua)
-            // Menggunakan User/Pass dari database
-            $response = Http::withDigestAuth($ioConfig->cam_username, $ioConfig->cam_password)
-                ->timeout(5)
-                ->get($url);
+    $url = "http://{$ip}/onvifsnapshot/media_service/snapshot?channel=1&subtype=0";
 
-            // PERCOBAAN 2: Basic Auth (Fallback jika Digest gagal/Unauthorized)
-            if ($response->status() == 401) {
-                // Log info bahwa kita mencoba cara kedua
-                Log::info("Digest Auth gagal untuk IP {$ioConfig->cam_ip}, mencoba Basic Auth.");
-                
-                $response = Http::withBasicAuth($ioConfig->cam_username, $ioConfig->cam_password)
-                    ->timeout(5)
-                    ->get($url);
-            }
+    Log::info("📷 SNAPSHOT ATTEMPT", ['ip' => $ip]);
 
-            if ($response->successful()) {
-                $fileName = 'snapshots/' . date('Y-m-d') . '/' . $cardNum . '_' . time() . '.jpg';
-                Storage::disk('public')->put($fileName, $response->body());
-                return $fileName;
-            } else {
-                Log::error("Gagal Snapshot IP {$ioConfig->cam_ip}. Status: " . $response->status());
-            }
+    $filename = "SNAP_{$cardNo}_" . now()->format('Ymd_His') . ".jpg";
+    $relativePath = "snapshots/{$filename}";
+    $storagePath = storage_path("app/public/{$relativePath}");
 
-        } catch (\Exception $e) {
-            Log::error("Error Koneksi Kamera IO ID {$ioConfig->id}: " . $e->getMessage());
-        }
-
-        return null;
+    if (!file_exists(dirname($storagePath))) {
+        mkdir(dirname($storagePath), 0755, true);
     }
 
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 15,
+        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_HTTPAUTH => CURLAUTH_DIGEST,
+        CURLOPT_USERPWD => "{$username}:{$password}",
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_SSL_VERIFYPEER => false,
+    ]);
+
+    $image = curl_exec($ch);
+    $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $ctype = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+    curl_close($ch);
+
+    if ($http === 200 && str_contains($ctype ?? '', 'image') && strlen($image) > 1000) {
+        
+        // 🗜️ COMPRESS IMAGE
+        $originalSize = strlen($image);
+        
+        // Load image
+        $img = imagecreatefromstring($image);
+        
+        if ($img !== false) {
+            // Get original dimensions
+            $width = imagesx($img);
+            $height = imagesy($img);
+            
+            // 📏 Option 1: Resize (lebih kecil = lebih ringan)
+            $maxWidth = 1280;  // Ubah sesuai kebutuhan (640, 800, 1024, 1280)
+            $maxHeight = 720;
+            
+            if ($width > $maxWidth || $height > $maxHeight) {
+                $ratio = min($maxWidth / $width, $maxHeight / $height);
+                $newWidth = (int)($width * $ratio);
+                $newHeight = (int)($height * $ratio);
+                
+                $resized = imagescale($img, $newWidth, $newHeight, IMG_BICUBIC);
+                imagedestroy($img);
+                $img = $resized;
+            }
+            
+            // 🗜️ Option 2: Compress quality (0-100, makin kecil = makin ringan)
+            $quality = 75; // 75 = balance antara size & quality (recommended: 70-85)
+            
+            // Save compressed image
+            imagejpeg($img, $storagePath, $quality);
+            imagedestroy($img);
+            
+            $compressedSize = filesize($storagePath);
+            $reduction = round((1 - $compressedSize / $originalSize) * 100, 1);
+            
+            Log::info("✅ SNAPSHOT OK (COMPRESSED)", [
+                'file' => $relativePath,
+                'original_size' => $this->formatBytes($originalSize),
+                'compressed_size' => $this->formatBytes($compressedSize),
+                'reduction' => "{$reduction}%"
+            ]);
+            
+            return $relativePath;
+        }
+        
+        // Fallback: save tanpa compress jika gagal
+        file_put_contents($storagePath, $image);
+        Log::info("✅ SNAPSHOT OK (NO COMPRESSION)", ['file' => $relativePath]);
+        return $relativePath;
+    }
+
+    Log::error("❌ SNAPSHOT GAGAL", ['http' => $http]);
+    return null;
+}
+
+// Helper function untuk format size
+private function formatBytes($bytes)
+{
+    if ($bytes >= 1048576) {
+        return round($bytes / 1048576, 2) . ' MB';
+    } elseif ($bytes >= 1024) {
+        return round($bytes / 1024, 2) . ' KB';
+    }
+    return $bytes . ' B';
+}
     private function logActivity($termno, $card, $io, $path)
     {
         GateLog::create([

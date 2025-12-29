@@ -13,12 +13,13 @@ class DeviceIoController extends Controller
      */
     public function store(Request $request, Device $device)
     {
+        // PERBAIKAN DI SINI: Ubah 'cam_user' jadi 'cam_username'
         $request->validate([
-            'io_status' => 'required|in:1,0',
-            'label' => 'required|string',
-            'cam_ip' => 'required|ipv4',
-            'cam_username' => 'required',
-            'cam_password' => 'required',
+            'io_status'     => 'required|in:1,0',
+            'label'         => 'required|string',
+            'cam_ip'        => 'required|ipv4',
+            'cam_username'  => 'required', // SEBELUMNYA: 'cam_user'
+            'cam_password'  => 'required',
         ]);
 
         // Cek apakah IO ini sudah ada di mesin ini? (Biar gak dobel IO=1)
@@ -31,6 +32,8 @@ class DeviceIoController extends Controller
         }
 
         // Simpan via relasi
+        // Karena nama input validasi sekarang 'cam_username', 
+        // maka $request->all() akan berisi key 'cam_username' yang cocok dengan database.
         $device->ios()->create($request->all());
 
         return back()->with('success', 'Konfigurasi IO berhasil ditambahkan.');

@@ -112,11 +112,25 @@ class ResidentController extends Controller
             'file_csv' => 'required|mimes:csv,txt|max:2048' // Max 2MB
         ]);
 
+        if (!$request->hasFile('file_csv') || !$request->file('file_csv')->isValid()) {
+            return back()->with('error', 'File CSV korup atau gagal diupload.');
+        }
+
         $file = $request->file('file_csv');
         $path = $file->getRealPath();
-        
+
+        // VALIDASI PATH KOSONG (Penyebab Error Sebelumnya)
+        if (!$path) {
+            return back()->with('error', 'Gagal membaca lokasi file temporary. Coba upload ulang.');
+        }
+
         // Membaca CSV
         $data = array_map('str_getcsv', file($path));
+        
+        if (empty($data)) {
+            return back()->with('error', 'File CSV kosong.');
+        }
+
         $header = array_shift($data); // Skip baris pertama (Header)
 
         DB::beginTransaction();
@@ -125,7 +139,6 @@ class ResidentController extends Controller
             $countBill = 0;
 
             foreach ($data as $row) {
-                // Mapping kolom sesuai CSV "tunggakan_monaco.csv"
                 // Index: 0=NO, 1=NO VA, 2=NO PELANGGAN, 3=Nama, 4=ALAMAT, 6=PERIODE, 10=TOTAL CHARGE
                 
                 // Pastikan baris memiliki data minimal
@@ -135,38 +148,35 @@ class ResidentController extends Controller
                 $noPelanggan = $row[2];
                 $nama = $row[3];
                 $alamat = $row[4];
-                $periodeStr = $row[6] ?? 'Tunggakan Awal';
                 
-                // Bersihkan format angka (hapus koma/titik jika ada) -> asumsi CSV standard angka polosan atau mata uang
+                // Bersihkan format angka
                 $totalCharge = filter_var($row[10] ?? 0, FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION); 
 
                 // 1. Simpan/Update Penghuni
-                // Kita pakai updateOrCreate biar kalau di-upload ulang tidak duplikat
-                $resident = \App\Models\Resident::updateOrCreate(
-                    ['no_pelanggan' => $noPelanggan], // Kunci pencarian unik
+                $resident = Resident::updateOrCreate(
+                    ['no_pelanggan' => $noPelanggan], 
                     [
                         'nama' => $nama,
                         'no_va' => $noVa,
                         'alamat' => $alamat,
-                        'iuran_bulanan' => 0, // Default 0 dulu, nanti diedit manual iuran per bulannya
+                        'iuran_bulanan' => 0, 
                         'is_active' => true
                     ]
                 );
                 $countResident++;
 
-                // 2. Masukkan Tunggakan ke Tabel Tagihan (Jika ada nominal)
+                // 2. Masukkan Tunggakan
                 if ($totalCharge > 0) {
-                    // Cek biar gak duplikat tagihan yang sama
                     $billExists = Bill::where('resident_id', $resident->id)
-                                      ->where('bulan', 'Total') // Penanda Import
-                                      ->where('tahun', 'Lama')  // Penanda Import
-                                      ->exists();
+                                    ->where('bulan', 'Total')
+                                    ->where('tahun', 'Lama')
+                                    ->exists();
                     
                     if (!$billExists) {
                         Bill::create([
                             'resident_id' => $resident->id,
-                            'bulan' => 'Total', // Kita tandai ini akumulasi
-                            'tahun' => 'Lama',  // Kita tandai ini data lama
+                            'bulan' => 'Total',
+                            'tahun' => 'Lama',
                             'jumlah_tagihan' => $totalCharge,
                             'status' => 'belum_bayar',
                             'created_at' => now(),

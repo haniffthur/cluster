@@ -57,10 +57,10 @@ class DeviceController extends Controller
         $request->validate([
             'termno' => 'required|alpha_dash|unique:devices,termno,' . $device->id,
             'lokasi' => 'required|string',
-            'cam_ip' => 'required|ipv4',
-            'cam_username' => 'required|string',
-            // Password boleh kosong jika tidak ingin diubah (opsional, tapi di sini kita wajibkan dulu biar aman)
-            'cam_password' => 'required|string',
+            // 'cam_ip' => 'required|ipv4',
+            // 'cam_username' => 'required|string',
+            // // Password boleh kosong jika tidak ingin diubah (opsional, tapi di sini kita wajibkan dulu biar aman)
+            // 'cam_password' => 'required|string',
         ]);
 
         $device->update($request->all());

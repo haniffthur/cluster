@@ -12,9 +12,9 @@ class Device extends Model
     protected $fillable = [
         'termno',
         'lokasi',
-        'cam_ip',
-        'cam_username',
-        'cam_password',
+        // 'cam_ip',
+        // 'cam_username',
+        // 'cam_password',
     ];
     public function ios()
     {
