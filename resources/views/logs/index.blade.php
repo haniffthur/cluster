@@ -94,7 +94,7 @@
             if ($('#autoRefreshSwitch').is(':checked')) {
                 fetchLogs();
             }
-        }, 3000); // Cek setiap 3 detik
+        }, 500); // Cek setiap 1 detik
 
         function fetchLogs() {
             $.ajax({

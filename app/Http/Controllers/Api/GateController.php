@@ -11,65 +11,105 @@ use App\Models\GateLog;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
+use App\Models\Resident;
+
 
 class GateController extends Controller
 {
-    public function handleTap(Request $request)
+   public function handleTap(Request $request)
     {
-        // 1. Ambil Parameter Dinamis dari Mesin
+        // 1. Ambil Parameter
         $termno = $request->query('termno');
-        $io = $request->query('io'); 
+        $io = $request->query('IO'); 
         $cardNumber = $request->query('card');
 
-        // Validasi
-        if (!$termno || !$cardNumber) {
-            return response()->json(['status' => 'ERROR', 'message' => 'Parameter tidak lengkap'], 400);
+        // Setup Variabel Default
+        $currentDate = now()->format('d-m-Y H:i:s');
+        $directionText = ($io == 1) ? 'In' : 'Out';
+
+        // Validasi Parameter
+        if (!$termno || !$cardNumber || is_null($io)) {
+            return response()->json([
+                'Status' => 0,
+                'Nama' => '-',
+                'Date' => $currentDate,
+                'Direction' => '-',
+                'Message' => 'Parameter tidak lengkap',
+                'Cardno' => $cardNumber ?? '-'
+            ], 400);
         }
 
-        // 2. Cek Validitas Kartu
-        $card = AccessCard::where('card_number', $cardNumber)->where('is_active', true)->first();
+        // 2. Cek Validitas Kartu (+ Load Relasi Resident)
+        // Kita gunakan 'with' agar query lebih efisien
+        $card = AccessCard::with('resident')
+                          ->where('card_number', $cardNumber)
+                          ->where('is_active', true)
+                          ->first();
+
         if (!$card) {
             $this->logActivity($termno, $cardNumber, $io, null);
-            return response()->json(['status' => 'DENIED', 'message' => 'Kartu Tidak Terdaftar'], 403);
+            return response()->json([
+                'Status' => 0, 
+                'Nama' => 'Unknown',
+                'Date' => $currentDate,
+                'Direction' => $directionText,
+                'Message' => 'DITOLAK   ',
+                'Cardno' => $cardNumber,
+            ], 403);
         }
 
-        // 3. Logika Anti-Passback (Cek Status Terakhir)
+        // --- AMBIL NAMA DARI RELASI RESIDENT ---
+        // Jika resident ada, ambil namanya. Jika tidak (misal kartu tamu), pakai default.
+        $namaWarga = $card->resident ? $card->resident->nama : 'Warga Tidak Dikenal';
+
+        // 3. Logika Anti-Passback
         $lastLog = GateLog::where('card_number', $cardNumber)->latest('tapped_at')->first();
         
         if ($io == 1 && $lastLog && $lastLog->io_status == 1) {
-            return response()->json(['status' => 'DENIED', 'message' => 'Kartu SUDAH DI DALAM.'], 403);
+            return response()->json([
+                'Status' => 0,
+                'Nama' => $namaWarga,
+                'Date' => $currentDate,
+                'Direction' => 'In',
+                'Message' => 'SUDAH MASUK',
+                'Cardno' => $cardNumber,
+            ], 403);
         }
         if ($io == 0 && $lastLog && $lastLog->io_status == 0) {
-            return response()->json(['status' => 'DENIED', 'message' => 'Kartu SUDAH DI LUAR.'], 403);
+            return response()->json([
+                'Status' => 0,
+                'Nama' => $namaWarga,
+                'Date' => $currentDate,
+                'Direction' => 'Out',
+                'Message' => 'SUDAH KLUAR',
+                'Cardno' => $cardNumber,
+            ], 403);
         }
 
-        // 4. Logika Snapshot DINAMIS
+        // 4. Logika Snapshot (Tetap)
         $snapshotPath = null;
         $device = Device::where('termno', $termno)->first();
-
         if ($device) {
-            // AMBIL CONFIG DARI DATABASE (Tabel device_ios)
-            // Ini bagian kuncinya: Data diambil berdasarkan IO yang sedang aktif
             $configIo = $device->ios()->where('io_status', $io)->first();
-
             if ($configIo) {
-                // Oper data config (IP/User/Pass) ke fungsi snapshot
+                // Panggil fungsi snapshot private di bawah
                 $snapshotPath = $this->captureSnapshotDynamic($configIo, $cardNumber);
-            } else {
-                Log::warning("IO {$io} belum disetting untuk Gate {$termno}");
             }
         }
 
-        // 5. Simpan Log & Buka Gate
+        // 5. Simpan Log & SUKSES
         $this->logActivity($termno, $cardNumber, $io, $snapshotPath);
 
         return response()->json([
-            'status' => 'SUCCESS',
-            'message' => 'Silahkan Lewat',
-            'gate_open' => true
+            'Status'    => 1,
+            'Nama'      => $namaWarga,
+            'Date'      => $currentDate,
+            'Direction' => $directionText,
+            'Message'   => 'DITERIMA ',
+            'Cardno'    => $cardNumber,
         ]);
     }
-
+    
     /**
      * Fungsi Snapshot Dinamis
      * Menggunakan IP, Username, & Password dari database ($ioConfig)
@@ -95,7 +135,7 @@ private function captureSnapshotDynamic($configIo, $cardNo)
     $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 15,
+        CURLOPT_TIMEOUT => 2,
         CURLOPT_CONNECTTIMEOUT => 5,
         CURLOPT_HTTPAUTH => CURLAUTH_DIGEST,
         CURLOPT_USERPWD => "{$username}:{$password}",

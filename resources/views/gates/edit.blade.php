@@ -31,7 +31,7 @@
                 </div>
             </div>
 
-            <hr>
+            <!-- <hr>
             <h6 class="font-weight-bold text-secondary mb-3">2. Koneksi Kamera Dahua</h6>
             
             <div class="form-group">
@@ -55,7 +55,7 @@
                 </div>
             </div>
 
-            <hr>
+            <hr> -->
             <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Update Konfigurasi</button>
             <a href="{{ route('gates.index') }}" class="btn btn-secondary">Batal</a>
         </form>
