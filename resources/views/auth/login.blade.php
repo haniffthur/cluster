@@ -177,7 +177,7 @@
                             </div>
 
                             <button type="submit" class="btn btn-primary btn-block btn-login">
-                                SIGN IN
+                                Sign in
                             </button>
 
                             <!-- <div class="text-center mt-4">
