@@ -14,10 +14,8 @@ return new class extends Migration
             $table->string('no_pelanggan')->unique(); // Contoh: 019/MNC/C1/08/270622
             $table->string('no_va')->nullable();      // Contoh: 8628722201900647
             $table->string('nama');
-            $table->text('alamat');
-            
+            $table->text('alamat');   
             // Kolom tambahan untuk sistem tagihan
-            $table->decimal('iuran_bulanan', 12, 2)->default(0); // Set nominal tagihan per bulan di sini
             $table->boolean('is_active')->default(true); // Status penghuni aktif/pindah
             
             $table->timestamps();

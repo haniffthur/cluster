@@ -6,6 +6,7 @@ use App\Models\Resident;
 use Illuminate\Http\Request;
 use App\Models\Bill;
 use Illuminate\Support\Facades\DB;
+use App\Models\AccessCard;
 class ResidentController extends Controller
 {
     /**
@@ -40,22 +41,44 @@ class ResidentController extends Controller
     /**
      * Simpan data baru ke database (Store)
      */
-    public function store(Request $request)
-    {
-        $request->validate([
-            'no_pelanggan' => 'required|unique:residents,no_pelanggan',
-            'nama' => 'required|string|max:255',
-            'no_va' => 'nullable|numeric',
-            'alamat' => 'required|string',
-            'iuran_bulanan' => 'required|numeric|min:0',
-            'is_active' => 'required|boolean',
-        ]);
+  public function store(Request $request)
+{
+    $request->validate([
+        'no_pelanggan' => 'required|unique:residents,no_pelanggan',
+        'nama' => 'required|string|max:255',
+        'no_va' => 'nullable|numeric',
+        'alamat' => 'required|string',
+        'is_active' => 'required|boolean',
+        // Validasi opsional untuk kartu awal
+        'card_number' => 'nullable|unique:access_cards,card_number',
+    ]);
 
-        Resident::create($request->all());
+    DB::beginTransaction(); // Pakai transaksi biar aman
+    try {
+        // 1. Simpan Data Warga
+        $resident = Resident::create($request->only([
+            'no_pelanggan', 'nama', 'no_va', 'alamat', 'is_active'
+        ]));
 
+        // 2. Jika ada input kartu, simpan data kartu
+        if ($request->filled('card_number')) {
+            AccessCard::create([
+                'card_number' => $request->card_number,
+                'resident_id' => $resident->id,
+                'kategori'    => 'penghuni',
+                'is_active'   => true,
+            ]);
+        }
+
+        DB::commit();
         return redirect()->route('residents.index')
-                         ->with('success', 'Data penghuni berhasil ditambahkan.');
+                         ->with('success', 'Data penghuni & kartu berhasil ditambahkan.');
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return back()->with('error', 'Terjadi kesalahan: ' . $e->getMessage())->withInput();
     }
+}
 
     /**
      * Tampilkan form edit data (Edit View)
@@ -68,23 +91,60 @@ class ResidentController extends Controller
     /**
      * Update data ke database (Update)
      */
-    public function update(Request $request, Resident $resident)
-    {
-        $request->validate([
-            // Ignore ID saat cek unique agar tidak error saat update diri sendiri
-            'no_pelanggan' => 'required|unique:residents,no_pelanggan,' . $resident->id,
-            'nama' => 'required|string|max:255',
-            'no_va' => 'nullable|numeric',
-            'alamat' => 'required|string',
-            'iuran_bulanan' => 'required|numeric|min:0',
-            'is_active' => 'required|boolean',
-        ]);
+   public function update(Request $request, Resident $resident)
+{
+    // Ambil kartu yang dimiliki penghuni ini (jika ada)
+    $currentCard = $resident->accessCards->first();
+    $cardId = $currentCard ? $currentCard->id : null;
 
-        $resident->update($request->all());
+    $request->validate([
+        'no_pelanggan' => 'required|unique:residents,no_pelanggan,' . $resident->id,
+        'nama'         => 'required|string|max:255',
+        'no_va'        => 'nullable|numeric',
+        'alamat'       => 'required|string',
+        'is_active'    => 'required|boolean',
+        // Validasi Kartu: Unique, TAPI abaikan ID kartu milik penghuni ini sendiri
+        'card_number'  => 'nullable|unique:access_cards,card_number,' . $cardId,
+    ]);
 
+    DB::beginTransaction();
+    try {
+        // 1. Update Data Warga
+        $resident->update($request->only(['no_pelanggan', 'nama', 'no_va', 'alamat', 'is_active']));
+
+        // 2. Logic Update/Create/Delete Kartu
+        $inputCard = $request->card_number;
+
+        if ($inputCard) {
+            // Jika ada input nomor kartu
+            if ($currentCard) {
+                // Update kartu yang sudah ada
+                $currentCard->update(['card_number' => $inputCard]);
+            } else {
+                // Buat kartu baru jika belum punya
+                AccessCard::create([
+                    'resident_id' => $resident->id,
+                    'card_number' => $inputCard,
+                    'kategori'    => 'penghuni',
+                    'is_active'   => true
+                ]);
+            }
+        } else {
+            // Jika input dikosongkan, tapi sebelumnya punya kartu -> Hapus kartunya
+            if ($currentCard) {
+                $currentCard->delete();
+            }
+        }
+
+        DB::commit();
         return redirect()->route('residents.index')
-                         ->with('success', 'Data penghuni berhasil diperbarui.');
+                         ->with('success', 'Data penghuni & kartu berhasil diperbarui.');
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return back()->with('error', 'Gagal update: ' . $e->getMessage())->withInput();
     }
+}
 
     /**
      * Hapus data (Delete)
@@ -159,7 +219,7 @@ class ResidentController extends Controller
                         'nama' => $nama,
                         'no_va' => $noVa,
                         'alamat' => $alamat,
-                        'iuran_bulanan' => 0, 
+                      
                         'is_active' => true
                     ]
                 );

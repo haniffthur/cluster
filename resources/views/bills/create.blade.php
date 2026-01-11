@@ -66,14 +66,11 @@
         $('.select2').select2({ theme: 'bootstrap4' });
 
         // Auto isi nominal saat penghuni dipilih
-        $('#resident_id').on('change', function() {
-            var iuran = $(this).find(':selected').data('iuran');
-            if(iuran) {
-                $('#jumlah_tagihan').val(iuran);
-            } else {
-                $('#jumlah_tagihan').val('');
-            }
-        });
+       $('#resident_id').on('change', function() {
+    // var iuran = $(this).find(':selected').data('iuran'); <-- Hapus
+    // Logic auto fill dihapus, user harus ketik manual nominalnya
+    $('#jumlah_tagihan').val(''); 
+});
     });
 </script>
 @endpush

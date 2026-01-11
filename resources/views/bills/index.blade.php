@@ -12,9 +12,9 @@
                 <form action="{{ route('bills.generate') }}" method="POST" class="d-inline"
                     onsubmit="return confirm('Generate tagihan bulan ini untuk semua warga aktif?');">
                     @csrf
-                    <button type="submit" class="btn btn-sm btn-info shadow-sm mr-2">
+                    <!-- <button type="submit" class="btn btn-sm btn-info shadow-sm mr-2">
                         <i class="fas fa-sync-alt fa-sm text-white-50"></i> Generate Bulan Ini
-                    </button>
+                    </button> -->
                 </form>
 
                 <a href="{{ route('bills.create') }}" class="d-none d-sm-inline-block btn btn-sm btn-primary shadow-sm">

@@ -8,6 +8,9 @@ use Illuminate\Http\Request;
 
 class CardController extends Controller
 {
+    /**
+     * Menampilkan daftar kartu
+     */
     public function index(Request $request)
     {
         // Ambil data kartu dengan relasi penghuni
@@ -27,34 +30,62 @@ class CardController extends Controller
         return view('cards.index', compact('cards'));
     }
 
+    /**
+     * Form tambah kartu baru
+     */
     public function create()
     {
-        // Kita butuh daftar penghuni untuk dropdown
-        $residents = Resident::where('is_active', true)->orderBy('nama')->get();
+        // LOGIC KHUSUS: Hanya ambil penghuni yang BELUM punya kartu
+        // Menggunakan 'doesntHave' untuk memfilter
+        $residents = Resident::where('is_active', true)
+                             ->doesntHave('accessCards') 
+                             ->orderBy('nama')
+                             ->get();
+
         return view('cards.create', compact('residents'));
     }
 
+    /**
+     * Simpan kartu baru
+     */
     public function store(Request $request)
     {
         $request->validate([
             'card_number' => 'required|unique:access_cards,card_number',
             'kategori'    => 'required|in:penghuni,tamu',
-            // resident_id wajib diisi jika kategori = penghuni
             'resident_id' => 'nullable|required_if:kategori,penghuni|exists:residents,id', 
             'is_active'   => 'required|boolean',
         ]);
+
+        // VALIDASI GANDA: Pastikan penghuni ini benar-benar belum punya kartu
+        if ($request->kategori == 'penghuni') {
+            $exists = AccessCard::where('resident_id', $request->resident_id)->exists();
+            if ($exists) {
+                return back()->with('error', 'Penghuni ini sudah memiliki kartu! Satu penghuni hanya boleh punya satu kartu.')->withInput();
+            }
+        }
 
         AccessCard::create($request->all());
 
         return redirect()->route('cards.index')->with('success', 'Kartu akses berhasil didaftarkan.');
     }
 
+    /**
+     * Form edit kartu
+     */
     public function edit(AccessCard $card)
     {
+        // Untuk edit, kita tampilkan semua penghuni, 
+        // tapi idealnya kita tandai mana yang sudah punya kartu.
+        // Agar simpel, kita ambil semua yang aktif.
         $residents = Resident::where('is_active', true)->orderBy('nama')->get();
+        
         return view('cards.edit', compact('card', 'residents'));
     }
 
+    /**
+     * Update data kartu
+     */
     public function update(Request $request, AccessCard $card)
     {
         $request->validate([
@@ -64,11 +95,22 @@ class CardController extends Controller
             'is_active'   => 'required|boolean',
         ]);
 
+        // Cek jika user mencoba mengganti pemilik ke orang lain yang SUDAH punya kartu
+        if ($request->kategori == 'penghuni' && $request->resident_id != $card->resident_id) {
+            $isTaken = AccessCard::where('resident_id', $request->resident_id)->exists();
+            if ($isTaken) {
+                return back()->with('error', 'Penghuni yang Anda pilih sudah memiliki kartu lain.')->withInput();
+            }
+        }
+
         $card->update($request->all());
 
         return redirect()->route('cards.index')->with('success', 'Data kartu berhasil diperbarui.');
     }
 
+    /**
+     * Hapus kartu
+     */
     public function destroy(AccessCard $card)
     {
         $card->delete();

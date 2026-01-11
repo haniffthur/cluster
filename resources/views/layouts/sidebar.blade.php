@@ -54,9 +54,9 @@
                 <h6 class="collapse-header">Tagihan & Pembayaran:</h6>
                 
                 {{-- Link ke Halaman Khusus Tunggakan (Belum Bayar) --}}
-                @if(Route::has('tunggakan.index'))
+                <!-- @if(Route::has('tunggakan.index'))
                     <a class="collapse-item {{ request()->routeIs('tunggakan.*') ? 'active' : '' }}" href="{{ route('tunggakan.index') }}">Data Tunggakan</a>
-                @endif
+                @endif -->
                     
                 {{-- Link ke Halaman Semua Tagihan (History) --}}
                 @if(Route::has('ipl_bills.index'))

@@ -43,7 +43,7 @@
                             <th>No Pelanggan</th>
                             <th>Nama</th>
                             <th>Alamat</th>
-                            <th>Iuran (Rp)</th>
+                       
                             <th>Status</th>
                             <th width="150">Aksi</th>
                         </tr>
@@ -55,7 +55,6 @@
                                         {{ $resident->no_va ?? '-' }}</small></td>
                                 <td class="font-weight-bold">{{ $resident->nama }}</td>
                                 <td>{{Str::limit($resident->alamat, 50)}}</td>
-                                <td>{{ number_format($resident->iuran_bulanan, 0, ',', '.') }}</td>
                                 <td>
                                     @if($resident->is_active)
                                         <span class="badge badge-success">Aktif</span>

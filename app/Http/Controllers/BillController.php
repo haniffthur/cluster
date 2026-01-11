@@ -123,30 +123,33 @@ class BillController extends Controller
      * Sama logikanya dengan Command Scheduler
      */
     public function generateBills()
-    {
-        $bulanIni = Carbon::now()->format('m');
-        $tahunIni = Carbon::now()->format('Y');
-        $residents = Resident::where('is_active', true)->where('iuran_bulanan', '>', 0)->get();
-        $count = 0;
+{
+    $bulanIni = Carbon::now()->format('m');
+    $tahunIni = Carbon::now()->format('Y');
+    $residents = Resident::where('is_active', true)->get(); // Hapus filter iuran > 0
+    $count = 0;
+    
+    // TENTUKAN NOMINAL STANDAR DI SINI (Karena di data warga sudah dihapus)
+    $nominalStandar = 100000; // Contoh: 100rb per warga
 
-        foreach ($residents as $resident) {
-            $exists = Bill::where('resident_id', $resident->id)
-                          ->where('bulan', $bulanIni)
-                          ->where('tahun', $tahunIni)
-                          ->exists();
+    foreach ($residents as $resident) {
+        $exists = Bill::where('resident_id', $resident->id)
+                      ->where('bulan', $bulanIni)
+                      ->where('tahun', $tahunIni)
+                      ->exists();
 
-            if (!$exists) {
-                Bill::create([
-                    'resident_id' => $resident->id,
-                    'bulan' => $bulanIni,
-                    'tahun' => $tahunIni,
-                    'jumlah_tagihan' => $resident->iuran_bulanan,
-                    'status' => 'belum_bayar'
-                ]);
-                $count++;
-            }
+        if (!$exists) {
+            Bill::create([
+                'resident_id' => $resident->id,
+                'bulan' => $bulanIni,
+                'tahun' => $tahunIni,
+                'jumlah_tagihan' => $nominalStandar, // Pakai nominal standar
+                'status' => 'belum_bayar'
+            ]);
+            $count++;
         }
-
-        return back()->with('success', "Berhasil generate {$count} tagihan untuk periode $bulanIni-$tahunIni.");
     }
+
+    return back()->with('success', "Berhasil generate {$count} tagihan (Nominal: Rp ".number_format($nominalStandar).").");
+}
 }

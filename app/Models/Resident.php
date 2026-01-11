@@ -14,7 +14,6 @@ class Resident extends Model
         'no_va',
         'nama',
         'alamat',
-        'iuran_bulanan',
         'is_active',
     ];
 
