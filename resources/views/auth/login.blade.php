@@ -162,14 +162,14 @@
                             <div class="form-group mb-4">
                                 <label class="small font-weight-bold text-gray-600 ml-1">ALAMAT EMAIL</label>
                                 <input type="email" name="email" class="form-control" 
-                                       placeholder="admin@cluster.com" value="{{ old('email') }}" required autofocus>
+                                       placeholder="email@example.com" value="{{ old('email') }}" required autofocus>
                             </div>
 
                             <div class="form-group mb-4">
                                 <label class="small font-weight-bold text-gray-600 ml-1">PASSWORD</label>
                                 <div class="input-wrapper">
                                     <input type="password" name="password" id="passwordInput" class="form-control" 
-                                           placeholder="••••••••" required>
+                                           placeholder="password" required>
                                     <span class="input-group-text" onclick="togglePassword()">
                                         <i class="far fa-eye" id="eyeIcon"></i>
                                     </span>
