@@ -49,7 +49,7 @@ class GateController extends Controller
                 'Direction' => $directionText,
                 'Message' => 'DITOLAK: KARTU TIDAK DIKENAL',
                 'Cardno' => $cardNumber,
-            ], 403);
+            ]);
         }
 
         // Ambil Data Warga
@@ -78,7 +78,7 @@ class GateController extends Controller
                     'Direction' => 'In',
                     'Message' => 'BELUM BAYAR',
                     'Cardno' => $cardNumber,
-                ], 403);
+                ]);
             }
         }
         // =========================================================================
@@ -94,7 +94,7 @@ class GateController extends Controller
                 'Direction' => 'In',
                 'Message' => 'SUDAH MASUK',
                 'Cardno' => $cardNumber,
-            ], 403);
+            ]);
         }
         if ($io == 0 && $lastLog && $lastLog->io_status == 0) {
             return response()->json([
@@ -104,7 +104,7 @@ class GateController extends Controller
                 'Direction' => 'Out',
                 'Message' => 'SUDAH KLUAR',
                 'Cardno' => $cardNumber,
-            ], 403);
+            ]);
         }
 
         // 4. Logika Snapshot (Kamera)
