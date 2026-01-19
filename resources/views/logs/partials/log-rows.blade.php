@@ -11,21 +11,48 @@
     <td class="align-middle">
         <span class="badge badge-light border">{{ $log->termno }}</span>
     </td>
-    <td class="align-middle">
+   <td class="align-middle">
         <div class="d-flex flex-column">
             <span class="font-weight-bold text-dark">{{ $log->card_number }}</span>
             
-            @if($log->card && $log->card->resident)
-                <span class="text-success small">
-                    <i class="fas fa-user-check mr-1"></i> {{ $log->card->resident->nama }}
-                </span>
-                <span class="text-muted small" style="font-size: 0.75rem">
-                    {{ $log->card->resident->alamat }}
-                </span>
-            @elseif($log->card && $log->card->kategori == 'tamu')
-                <span class="text-info small"><i class="fas fa-user-tag mr-1"></i> Tamu / Staff</span>
+            {{-- LOGIC IDENTITAS --}}
+            @if($log->card)
+                {{-- 1. Jika Penghuni --}}
+                @if($log->card->kategori == 'penghuni' && $log->card->resident)
+                    <span class="text-success small">
+                        <i class="fas fa-user-check mr-1"></i> {{ $log->card->resident->nama }}
+                    </span>
+                    <span class="text-muted small" style="font-size: 0.75rem">
+                        {{ $log->card->resident->alamat }}
+                    </span>
+
+                {{-- 2. Jika Security (TAMBAHAN BARU) --}}
+                @elseif($log->card->kategori == 'security')
+                    <span class="text-dark small font-weight-bold">
+                        <i class="fas fa-user-shield mr-1"></i> SECURITY / PATROLI
+                    </span>
+                    <span class="text-muted small" style="font-size: 0.75rem">
+                        Akses Master
+                    </span>
+
+                {{-- 3. Jika Tamu --}}
+                @elseif($log->card->kategori == 'tamu')
+                    <span class="text-info small">
+                        <i class="fas fa-user-tag mr-1"></i> Tamu / Staff
+                    </span>
+
+                {{-- 4. Kategori Lain/Error --}}
+                @else
+                    <span class="text-warning small">
+                        <i class="fas fa-exclamation-circle mr-1"></i> Data Tidak Lengkap
+                    </span>
+                @endif
+
             @else
-                <span class="text-danger small"><i class="fas fa-question-circle mr-1"></i> Kartu Tidak Terdaftar</span>
+                {{-- 5. Jika Kartu Tidak Ada di Database --}}
+                <span class="text-danger small">
+                    <i class="fas fa-question-circle mr-1"></i> Kartu Tidak Terdaftar
+                </span>
             @endif
         </div>
     </td>
