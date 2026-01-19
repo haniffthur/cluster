@@ -13,28 +13,22 @@ class GateController extends Controller
 {
     public function handleTap(Request $request)
     {
-        // 1. Ambil Parameter
+        // 1. AMBIL & VALIDASI PARAMETER
         $termno = $request->query('termno');
-        $io = $request->query('IO'); // Pastikan url pakai IO huruf besar
+        $io = $request->query('IO'); 
         $cardNumber = $request->query('card');
 
-        // Setup Variabel Default
         $currentDate = now()->format('d-m-Y H:i:s');
         $directionText = ($io == 1) ? 'In' : 'Out';
 
-        // Validasi Parameter
         if (!$termno || !$cardNumber || is_null($io)) {
             return response()->json([
-                'Status' => 0,
-                'Nama' => '-',
-                'Date' => $currentDate,
-                'Direction' => '-',
-                'Message' => 'Parameter tidak lengkap',
-                'Cardno' => $cardNumber ?? '-'
+                'Status' => 0, 'Nama' => '-', 'Date' => $currentDate, 'Direction' => '-',
+                'Message' => 'Parameter tidak lengkap', 'Cardno' => $cardNumber ?? '-'
             ], 400);
         }
 
-        // 2. Cek Validitas Kartu (+ Load Relasi Resident)
+        // 2. CEK VALIDITAS KARTU
         $card = AccessCard::with('resident')
                           ->where('card_number', $cardNumber)
                           ->where('is_active', true)
@@ -43,71 +37,69 @@ class GateController extends Controller
         if (!$card) {
             $this->logActivity($termno, $cardNumber, $io, null);
             return response()->json([
-                'Status' => 0, 
-                'Nama' => 'Unknown',
-                'Date' => $currentDate,
-                'Direction' => $directionText,
-                'Message' => 'DITOLAK: KARTU TIDAK DIKENAL',
-                'Cardno' => $cardNumber,
-            ]);
+                'Status' => 0, 'Nama' => 'Unknown', 'Date' => $currentDate, 'Direction' => $directionText,
+                'Message' => 'DITOLAK: KARTU TIDAK DIKENAL', 'Cardno' => $cardNumber,
+            ]); 
         }
 
-        // Ambil Data Warga
-        $resident = $card->resident;
-        $namaWarga = $resident ? $resident->nama : 'Master Card';
+        // 3. TENTUKAN LABEL NAMA
+        if ($card->kategori == 'penghuni' && $card->resident) {
+            $namaWarga = $card->resident->nama;
+        } elseif ($card->kategori == 'security') {
+            $namaWarga = 'SECURITY / PATROLI';
+        } else {
+            $namaWarga = 'TAMU / UMUM';
+        }
 
-        // =========================================================================
-        // 2.5 CEK TUNGGAKAN (Hanya Cek Jika Mau Masuk / IO = 1)
-        // =========================================================================
-        
-        if ($resident && $io == 1) {
-            // Hitung total tagihan yang statusnya 'belum_bayar'
-            $totalTunggakan = $resident->bills()
-                                       ->where('status', 'belum_bayar') 
-                                       ->sum('jumlah_tagihan');
+        // 4. CEK TUNGGAKAN (TETAP KHUSUS PENGHUNI)
+        // Tamu tidak punya tagihan IPL, jadi logic ini di-skip untuk tamu.
+        if ($card->kategori == 'penghuni' && $card->resident && $io == 1) {
+            $totalTunggakan = $card->resident->bills()
+                                           ->where('status', 'belum_bayar') 
+                                           ->sum('jumlah_tagihan');
 
-            // Jika ada tunggakan lebih dari 0
             if ($totalTunggakan > 0) {
-                // Log activity (Opsional, agar terekam history orang ditolak)
                 $this->logActivity($termno, $cardNumber, $io, null);
+                return response()->json([
+                    'Status' => 0, 'Nama' => $namaWarga, 'Date' => $currentDate, 'Direction' => 'In',
+                    'Message' => 'BELUM BAYAR', 'Cardno' => $cardNumber,
+                ]);
+            }
+        }
 
+        // =========================================================================
+        // 5. LOGIKA ANTI-PASSBACK (PENGHUNI + TAMU)
+        // =========================================================================
+        // Security tetap bebas (Skip logic ini).
+        // Tamu sekarang ikut dicek agar tidak bisa tap masuk 2x berturut-turut.
+        
+        if ($card->kategori == 'penghuni' || $card->kategori == 'tamu') {
+            
+            $lastLog = GateLog::where('card_number', $cardNumber)->latest('tapped_at')->first();
+            
+            if ($io == 1 && $lastLog && $lastLog->io_status == 1) {
                 return response()->json([
                     'Status' => 0,
                     'Nama' => $namaWarga,
                     'Date' => $currentDate,
                     'Direction' => 'In',
-                    'Message' => 'BELUM BAYAR',
+                    'Message' => 'SUDAH MASUK (ANTI-PASSBACK)',
+                    'Cardno' => $cardNumber,
+                ]);
+            }
+            if ($io == 0 && $lastLog && $lastLog->io_status == 0) {
+                return response()->json([
+                    'Status' => 0,
+                    'Nama' => $namaWarga,
+                    'Date' => $currentDate,
+                    'Direction' => 'Out',
+                    'Message' => 'SUDAH KELUAR (ANTI-PASSBACK)',
                     'Cardno' => $cardNumber,
                 ]);
             }
         }
-        // =========================================================================
 
-        // 3. Logika Anti-Passback
-        $lastLog = GateLog::where('card_number', $cardNumber)->latest('tapped_at')->first();
-        
-        if ($io == 1 && $lastLog && $lastLog->io_status == 1) {
-            return response()->json([
-                'Status' => 0,
-                'Nama' => $namaWarga,
-                'Date' => $currentDate,
-                'Direction' => 'In',
-                'Message' => 'SUDAH MASUK',
-                'Cardno' => $cardNumber,
-            ]);
-        }
-        if ($io == 0 && $lastLog && $lastLog->io_status == 0) {
-            return response()->json([
-                'Status' => 0,
-                'Nama' => $namaWarga,
-                'Date' => $currentDate,
-                'Direction' => 'Out',
-                'Message' => 'SUDAH KLUAR',
-                'Cardno' => $cardNumber,
-            ]);
-        }
-
-        // 4. Logika Snapshot (Kamera)
+        // 6. SNAPSHOT KAMERA
         $snapshotPath = null;
         $device = Device::where('termno', $termno)->first();
         if ($device) {
@@ -117,7 +109,7 @@ class GateController extends Controller
             }
         }
 
-        // 5. Simpan Log & SUKSES
+        // 7. SUKSES - BUKA GATE
         $this->logActivity($termno, $cardNumber, $io, $snapshotPath);
 
         return response()->json([
@@ -125,15 +117,14 @@ class GateController extends Controller
             'Nama'      => $namaWarga,
             'Date'      => $currentDate,
             'Direction' => $directionText,
-            'Message'   => 'Akses Ok  ',
+            'Message'   => 'Akses Diterima',
             'Cardno'    => $cardNumber,
         ]);
     }
-    
-    // -------------------------------------------------------------------------
-    // FUNCTION PENDUKUNG (JANGAN DIHAPUS)
-    // -------------------------------------------------------------------------
 
+    // ... (Function captureSnapshotDynamic dan logActivity TETAP SAMA) ...
+    // Copy paste bagian bawah dari kode sebelumnya
+    
     private function captureSnapshotDynamic($configIo, $cardNo)
     {
         $ip = trim($configIo->cam_ip);
@@ -142,7 +133,7 @@ class GateController extends Controller
 
         $url = "http://{$ip}/onvifsnapshot/media_service/snapshot?channel=1&subtype=0";
 
-        Log::info("📷 SNAPSHOT ATTEMPT", ['ip' => $ip]);
+        // Log::info("📷 SNAPSHOT ATTEMPT", ['ip' => $ip]);
 
         $filename = "SNAP_{$cardNo}_" . now()->format('Ymd_His') . ".jpg";
         $relativePath = "snapshots/{$filename}";
@@ -155,7 +146,7 @@ class GateController extends Controller
         $ch = curl_init($url);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 2, // Timeout cepat agar gate tidak nunggu lama
+            CURLOPT_TIMEOUT => 2,
             CURLOPT_CONNECTTIMEOUT => 2,
             CURLOPT_HTTPAUTH => CURLAUTH_DIGEST,
             CURLOPT_USERPWD => "{$username}:{$password}",
@@ -169,7 +160,6 @@ class GateController extends Controller
         curl_close($ch);
 
         if ($http === 200 && str_contains($ctype ?? '', 'image') && strlen($image) > 1000) {
-            // Compress Image Logic
             $img = imagecreatefromstring($image);
             if ($img !== false) {
                 $width = imagesx($img);
@@ -189,7 +179,6 @@ class GateController extends Controller
                 
                 imagejpeg($img, $storagePath, 75);
                 imagedestroy($img);
-                Log::info("✅ SNAPSHOT OK", ['file' => $relativePath]);
                 return $relativePath;
             }
             
@@ -197,7 +186,6 @@ class GateController extends Controller
             return $relativePath;
         }
 
-        Log::error("❌ SNAPSHOT GAGAL", ['http' => $http]);
         return null;
     }
 

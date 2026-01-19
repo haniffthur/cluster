@@ -11,7 +11,7 @@
                 <span class="mr-2 d-none d-lg-inline text-gray-600 small">
                     {{ auth()->user()->name ?? 'Administrator' }}
                 </span>
-                <img class="img-profile rounded-circle" src="https://source.unsplash.com/QAB-WJcbgJk/60x60">
+                <img class="img-profile rounded-circle" src="{{ asset('img/admin.png') }}">
             </a>
             <div class="dropdown-menu dropdown-menu-right shadow animated--grow-in">
                 <a class="dropdown-item" href="#" data-toggle="modal" data-target="#logoutModal">

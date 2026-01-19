@@ -51,12 +51,12 @@ class CardController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'card_number' => 'required|unique:access_cards,card_number',
-            'kategori'    => 'required|in:penghuni,tamu',
-            'resident_id' => 'nullable|required_if:kategori,penghuni|exists:residents,id', 
-            'is_active'   => 'required|boolean',
-        ]);
-
+        'card_number' => 'required|unique:access_cards,card_number',
+        // Tambahkan 'security' di sini
+        'kategori'    => 'required|in:penghuni,tamu,security', 
+        'resident_id' => 'nullable|required_if:kategori,penghuni|exists:residents,id', 
+        'is_active'   => 'required|boolean',
+    ]);
         // VALIDASI GANDA: Pastikan penghuni ini benar-benar belum punya kartu
         if ($request->kategori == 'penghuni') {
             $exists = AccessCard::where('resident_id', $request->resident_id)->exists();
@@ -89,11 +89,12 @@ class CardController extends Controller
     public function update(Request $request, AccessCard $card)
     {
         $request->validate([
-            'card_number' => 'required|unique:access_cards,card_number,' . $card->id,
-            'kategori'    => 'required|in:penghuni,tamu',
-            'resident_id' => 'nullable|required_if:kategori,penghuni|exists:residents,id',
-            'is_active'   => 'required|boolean',
-        ]);
+        'card_number' => 'required|unique:access_cards,card_number,' . $card->id,
+        // Tambahkan 'security' di sini juga
+        'kategori'    => 'required|in:penghuni,tamu,security',
+        'resident_id' => 'nullable|required_if:kategori,penghuni|exists:residents,id',
+        'is_active'   => 'required|boolean',
+    ]);
 
         // Cek jika user mencoba mengganti pemilik ke orang lain yang SUDAH punya kartu
         if ($request->kategori == 'penghuni' && $request->resident_id != $card->resident_id) {
