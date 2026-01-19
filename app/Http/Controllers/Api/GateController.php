@@ -54,7 +54,7 @@ class GateController extends Controller
 
         // Ambil Data Warga
         $resident = $card->resident;
-        $namaWarga = $resident ? $resident->nama : 'Warga Tidak Dikenal';
+        $namaWarga = $resident ? $resident->nama : 'Master Card';
 
         // =========================================================================
         // 2.5 CEK TUNGGAKAN (Hanya Cek Jika Mau Masuk / IO = 1)
@@ -125,7 +125,7 @@ class GateController extends Controller
             'Nama'      => $namaWarga,
             'Date'      => $currentDate,
             'Direction' => $directionText,
-            'Message'   => 'Akses Diterima',
+            'Message'   => 'Akses Ok  ',
             'Cardno'    => $cardNumber,
         ]);
     }
