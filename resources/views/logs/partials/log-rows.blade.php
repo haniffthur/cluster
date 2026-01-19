@@ -11,13 +11,11 @@
     <td class="align-middle">
         <span class="badge badge-light border">{{ $log->termno }}</span>
     </td>
-   <td class="align-middle">
+    <td class="align-middle">
         <div class="d-flex flex-column">
             <span class="font-weight-bold text-dark">{{ $log->card_number }}</span>
             
-            {{-- LOGIC IDENTITAS --}}
             @if($log->card)
-                {{-- 1. Jika Penghuni --}}
                 @if($log->card->kategori == 'penghuni' && $log->card->resident)
                     <span class="text-success small">
                         <i class="fas fa-user-check mr-1"></i> {{ $log->card->resident->nama }}
@@ -25,31 +23,18 @@
                     <span class="text-muted small" style="font-size: 0.75rem">
                         {{ $log->card->resident->alamat }}
                     </span>
-
-                {{-- 2. Jika Security (TAMBAHAN BARU) --}}
                 @elseif($log->card->kategori == 'security')
                     <span class="text-dark small font-weight-bold">
                         <i class="fas fa-user-shield mr-1"></i> SECURITY / PATROLI
                     </span>
-                    <span class="text-muted small" style="font-size: 0.75rem">
-                        Akses Master
-                    </span>
-
-                {{-- 3. Jika Tamu --}}
                 @elseif($log->card->kategori == 'tamu')
                     <span class="text-info small">
                         <i class="fas fa-user-tag mr-1"></i> Tamu / Staff
                     </span>
-
-                {{-- 4. Kategori Lain/Error --}}
                 @else
-                    <span class="text-warning small">
-                        <i class="fas fa-exclamation-circle mr-1"></i> Data Tidak Lengkap
-                    </span>
+                    <span class="text-warning small">Data Tidak Lengkap</span>
                 @endif
-
             @else
-                {{-- 5. Jika Kartu Tidak Ada di Database --}}
                 <span class="text-danger small">
                     <i class="fas fa-question-circle mr-1"></i> Kartu Tidak Terdaftar
                 </span>
@@ -65,17 +50,13 @@
     </td>
     <td class="align-middle text-center">
         @if($log->snapshot_path)
-            {{-- Kita pakai class 'btn-snapshot' untuk event handler modal nanti --}}
+            {{-- HANYA TOMBOL SAJA (Modal sudah dipindah ke index.blade.php) --}}
             <button type="button" class="btn btn-sm btn-info shadow-sm btn-snapshot" 
-                data-toggle="modal" 
-                data-target="#snapModal{{ $log->id }}"
                 data-img="{{ asset('storage/' . $log->snapshot_path) }}"
                 data-time="{{ $log->tapped_at }}"
                 data-term="{{ $log->termno }}">
                 <i class="fas fa-camera"></i> Lihat Foto
             </button>
-            
-            {{-- Modal kita pindahkan keluar loop agar tidak duplikat ID --}}
         @else
             <span class="text-muted small">- Tidak ada foto -</span>
         @endif

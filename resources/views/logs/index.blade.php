@@ -15,6 +15,7 @@
 <div class="card shadow mb-4">
     <div class="card-header py-3 d-flex justify-content-between align-items-center">
         <h6 class="m-0 font-weight-bold text-primary">Data Keluar Masuk</h6>
+        
         <div class="custom-control custom-switch">
             <input type="checkbox" class="custom-control-input" id="autoRefreshSwitch" checked>
             <label class="custom-control-label small font-weight-bold" for="autoRefreshSwitch">Auto Refresh</label>
@@ -22,10 +23,32 @@
     </div>
     <div class="card-body">
         
-        {{-- PANEL FILTER (Biarkan seperti semula) --}}
+        {{-- PANEL FILTER --}}
         <form action="{{ route('access-logs.index') }}" method="GET" class="mb-4">
-            {{-- ... Kode Form Filter Anda (Copy dari kode lama) ... --}}
-            {{-- TIPS: Jika sedang memfilter (search/date), sebaiknya matikan auto refresh via JS --}}
+            <div class="form-row align-items-end">
+                <div class="col-md-4 mb-2">
+                    <label class="small font-weight-bold">Cari Nama / Kartu</label>
+                    <input type="text" name="search" class="form-control" placeholder="Ketikan sesuatu..." value="{{ request('search') }}">
+                </div>
+                <div class="col-md-3 mb-2">
+                    <label class="small font-weight-bold">Filter Gate</label>
+                    <select name="termno" class="form-control">
+                        <option value="">- Semua Gate -</option>
+                        @foreach($gates as $gate)
+                            <option value="{{ $gate->termno }}" {{ request('termno') == $gate->termno ? 'selected' : '' }}>
+                                {{ $gate->termno }} ({{ $gate->lokasi }})
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="col-md-2 mb-2">
+                    <label class="small font-weight-bold">Tanggal</label>
+                    <input type="date" name="start_date" class="form-control" value="{{ request('start_date') }}">
+                </div>
+                <div class="col-md-2 mb-2">
+                    <button type="submit" class="btn btn-primary btn-block"><i class="fas fa-filter"></i> Filter</button>
+                </div>
+            </div>
         </form>
 
         <hr>
@@ -49,14 +72,14 @@
             </table>
         </div>
 
-        {{-- Pagination (Hanya muncul jika auto refresh mati / mode filter) --}}
+        {{-- Pagination --}}
         <div class="d-flex justify-content-end mt-3" id="pagination-links">
             {{ $logs->withQueryString()->links('pagination::bootstrap-4') }}
         </div>
     </div>
 </div>
 
-{{-- SINGLE MODAL UNTUK PREVIEW FOTO --}}
+{{-- GLOBAL MODAL (Di luar Tabel agar tidak kedap-kedip) --}}
 <div class="modal fade" id="globalSnapModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
         <div class="modal-content">
@@ -66,12 +89,12 @@
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
-            <div class="modal-body text-center bg-dark">
-                <img src="" id="modalImage" class="img-fluid" alt="Loading...">
+            <div class="modal-body text-center bg-dark p-0">
+                <img src="" id="modalImage" class="img-fluid" alt="Loading..." style="max-height: 80vh;">
             </div>
-            <div class="modal-footer bg-light">
-                <span class="mr-auto text-muted small" id="modalTime"></span>
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Tutup</button>
+            <div class="modal-footer bg-light py-2">
+                <span class="mr-auto text-muted small font-weight-bold" id="modalTime"></span>
+                <button type="button" class="btn btn-sm btn-secondary" data-dismiss="modal">Tutup</button>
             </div>
         </div>
     </div>
@@ -82,19 +105,24 @@
 @push('scripts')
 <script>
     $(document).ready(function() {
-        let isFilterActive = "{{ request()->hasAny(['search', 'termno', 'start_date']) }}";
-        
-        // Jika sedang filter, matikan auto refresh defaultnya
-        if(isFilterActive) {
+        // 1. LOGIC PINTAR AUTO REFRESH
+        // Cek apakah ada parameter filter atau page di URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const hasPage = urlParams.has('page') && urlParams.get('page') != '1'; // Sedang di page 2, 3, dst
+        const hasSearch = urlParams.has('search') || urlParams.has('termno') || urlParams.has('start_date');
+
+        // Jika sedang buka halaman 2++ ATAU sedang cari data -> MATIKAN AUTO REFRESH
+        if (hasPage || hasSearch) {
             $('#autoRefreshSwitch').prop('checked', false);
+            console.log("Auto refresh dimatikan karena sedang filter/paging.");
         }
 
-        // Logic Auto Refresh
+        // 2. INTERVAL REFRESH
         setInterval(function() {
             if ($('#autoRefreshSwitch').is(':checked')) {
                 fetchLogs();
             }
-        }, 500); // Cek setiap 1 detik
+        }, 2000); // Refresh tiap 2 detik (Lebih santai daripada 500ms)
 
         function fetchLogs() {
             $.ajax({
@@ -106,20 +134,21 @@
                     }
                 },
                 error: function(err) {
-                    console.log("Gagal mengambil data live:", err);
+                    console.log("Gagal update log:", err);
                 }
             });
         }
 
-        // Logic untuk Modal Foto (Event Delegation karena tombolnya dinamis dari AJAX)
+        // 3. LOGIC MODAL (Event Delegation)
+        // Pakai $(document).on agar tombol yang baru muncul dari AJAX tetap bisa diklik
         $(document).on('click', '.btn-snapshot', function() {
             let imgUrl = $(this).data('img');
             let time = $(this).data('time');
             let term = $(this).data('term');
 
             $('#modalImage').attr('src', imgUrl);
-            $('#modalTitle').text('Snapshot: ' + term);
-            $('#modalTime').text('Waktu: ' + time);
+            $('#modalTitle').text('Snapshot Gate: ' + term);
+            $('#modalTime').text('Waktu Akses: ' + time);
             
             $('#globalSnapModal').modal('show');
         });
